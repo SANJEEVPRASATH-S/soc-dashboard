@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOC Command Center</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-primary:   #ffffff;
+    --bg-secondary: #f4f4f2;
+    --bg-tertiary:  #eeecea;
+    --text-primary:   #1a1a19;
+    --text-secondary: #ff0000;
+    --border: rgba(0,0,0,0.12);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary:   #1e1e1c;
+      --bg-secondary: #2a2a28;
+      --bg-tertiary:  #333331;
+      --text-primary:   #f0ede8;
+      --text-secondary: #9a9994;
+      --border: rgba(255,255,255,0.1);
+    }
+  }
+  body { font-family: 'Courier New', monospace; background: var(--bg-tertiary); color: var(--text-primary); padding: 1.5rem; min-height: 100vh; }
+  .soc { max-width: 1200px; margin: 0 auto; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .top-bar h1 { font-size: 13px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); }
+  .live { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+  .metric { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 0.85rem 1rem; }
+  .metric .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+  .metric .value { font-size: 26px; font-weight: 500; line-height: 1; }
+  .metric .delta { font-size: 11px; margin-top: 4px; }
+  .v-crit  { color: #E24B4A; }
+  .v-warn  { color: #BA7517; }
+  .v-ok    { color: #1D9E75; }
+  .v-info  { color: #378ADD; }
+  .v-muted { color: var(--text-secondary); }
+  .d-up    { color: #E24B4A; }
+  .d-dn    { color: #1D9E75; }
+  .mid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .panel { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; }
+  .panel-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.8rem; }
+
+  /* Search & Filter */
+  .filter-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .filter-bar input {
+    flex: 1; min-width: 120px; padding: 5px 8px; font-size: 11px; font-family: inherit;
+    background: var(--bg-secondary); border: 0.5px solid var(--border);
+    border-radius: 5px; color: var(--text-primary); outline: none;
+  }
+  .filter-bar input:focus { border-color: #378ADD; }
+  .filter-btn {
+    padding: 5px 10px; font-size: 10px; font-family: inherit; border-radius: 5px;
+    border: 0.5px solid var(--border); background: var(--bg-secondary);
+    color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+  }
+  .filter-btn:hover  { background: var(--bg-tertiary); }
+  .filter-btn.active { background: #1a1a19; color: #fff; border-color: #1a1a19; }
+  .filter-btn.active.sev-crit { background: #E24B4A; border-color: #E24B4A; color: #fff; }
+  .filter-btn.active.sev-high { background: #EF9F27; border-color: #EF9F27; color: #fff; }
+  .filter-btn.active.sev-med  { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .filter-btn.active.sev-low  { background: #888780; border-color: #888780; color: #fff; }
+  .filter-count { font-size: 10px; color: var(--text-secondary); margin-bottom: 6px; }
+
+  .alert-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; }
+  .alert-row:last-child { border-bottom: none; }
+  .sev          { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sev-critical { background: #E24B4A; }
+  .sev-high     { background: #EF9F27; }
+  .sev-medium   { background: #378ADD; }
+  .sev-low      { background: #888780; }
+  .alert-msg  { flex: 1; color: var(--text-primary); }
+  .alert-time { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+  .badge    { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+  .b-new    { background: #FCEBEB; color: #A32D2D; }
+  .b-active { background: #FAEEDA; color: #854F0B; }
+  .b-closed { background: #EAF3DE; color: #3B6D11; }
+  .bar-wrap  { margin-bottom: 10px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+  .bar-track { height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 5px; height: 80px; margin-top: 0.5rem; padding-bottom: 20px; }
+  .bar-col { flex: 1; border-radius: 2px 2px 0 0; position: relative; cursor: default; transition: opacity 0.2s; }
+  .bar-col:hover { opacity: 0.75; }
+  .bar-col span { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
+  .bottom { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .mini-table th { text-align: left; color: var(--text-secondary); font-weight: 500; padding: 0 0 6px; border-bottom: 0.5px solid var(--border); }
+  .mini-table td { padding: 6px 0; border-bottom: 0.5px solid var(--border); color: var(--text-primary); }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; vertical-align: 2px; }
+  .s-healthy  { background: #1D9E75; }
+  .s-degraded { background: #EF9F27; }
+  .s-critical { background: #E24B4A; }
+  .timeline { font-size: 11px; }
+  .tl-row  { display: flex; gap: 10px; padding: 6px 0; border-bottom: 0.5px solid var(--border); align-items: flex-start; }
+  .tl-row:last-child { border-bottom: none; }
+  .tl-time { color: var(--text-secondary); white-space: nowrap; width: 44px; flex-shrink: 0; margin-top: 1px; }
+  .tl-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .tl-text { color: var(--text-primary); line-height: 1.4; }
+
+  /* Toast */
+  .toast-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: #1e1e1c; color: #f0ede8; border-left: 3px solid #E24B4A; border-radius: 6px; padding: 10px 14px; font-size: 12px; min-width: 260px; animation: slideIn 0.3s ease; }
+  .toast .t-title { font-weight: 500; margin-bottom: 3px; color: #E24B4A; }
+  .toast .t-msg   { color: #9a9994; }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  @media (max-width: 900px) { .mid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .metrics { grid-template-columns: repeat(2,1fr); } .bottom { grid-template-columns: 1fr; } }
+  @media (max-width: 400px) { .metrics { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<div class="soc">
+  <div class="top-bar">
+    <h1><i class="ti ti-shield-lock" style="font-size:14px;vertical-align:-2px;margin-right:6px;"></i>SOC Command Center</h1>
+    <div class="live"><div class="pulse"></div>Live &middot; <span id="clock">--:--:--</span> UTC</div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="label">Active Threats</div>
+      <div class="value v-crit" id="m-threats">--</div>
+      <div class="delta d-up">&#8593; 3 in last hour</div>
+    </div>
+    <div class="metric">
+      <div class="label">Open Incidents</div>
+      <div class="value v-warn" id="m-incidents">--</div>
+      <div class="delta d-up">&#8593; 5 since yesterday</div>
+    </div>
+    <div class="metric">
+      <div class="label">MTTR (min)</div>
+      <div class="value v-info" id="m-mttr">--</div>
+      <div class="delta d-dn">&#8595; 12 improved</div>
+    </div>
+    <div class="metric">
+      <div class="label">Systems Healthy</div>
+      <div class="value v-ok"><span id="m-healthy">--</span><span style="font-size:14px">%</span></div>
+      <div class="delta v-muted"><span id="m-healthy-count">-- / --</span> endpoints</div>
+    </div>
+  </div>
+
+  <div class="mid">
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-bell" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>Recent Alerts</div>
+
+      <!-- Search & Filter Bar -->
+      <div class="filter-bar">
+        <input type="text" id="search-input" placeholder="Search alerts..." oninput="applyFilters()">
+        <button class="filter-btn active" id="btn-all" onclick="setFilter('all')">All</button>
+        <button class="filter-btn sev-crit" id="btn-critical" onclick="setFilter('critical')">Critical</button>
+        <button class="filter-btn sev-high" id="btn-high" onclick="setFilter('high')">High</button>
+        <button class="filter-btn sev-med" id="btn-medium" onclick="setFilter('medium')">Medium</button>
+        <button class="filter-btn sev-low" id="btn-low" onclick="setFilter('low')">Low</button>
+        <button class="filter-btn" id="btn-new" onclick="setStatusFilter('new')">New</button>
+        <button class="filter-btn" id="btn-active" onclick="setStatusFilter('active')">Active</button>
+        <button class="filter-btn" id="btn-closed" onclick="setStatusFilter('closed')">Closed</button>
+      </div>
+      <div class="filter-count" id="filter-count"></div>
+      <div id="alerts-list"><div style="color:var(--text-secondary);font-size:12px;">Loading...</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-chart-bar" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>Threat Categories</div>
+      <div id="categories-list"></div>
+      <div class="panel-title" style="margin-top:1.1rem;">
+        <i class="ti ti-activity" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>Alert volume &middot; last 12h
+      </div>
+      <div class="chart-bars" id="sparkbars"></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-server" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>System Health</div>
+      <table class="mini-table">
+        <thead><tr><th>Service</th><th>Status</th><th>Uptime</th></tr></thead>
+        <tbody id="systems-list"><tr><td colspan="3" style="color:var(--text-secondary);">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-map-pin" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>Top Source IPs</div>
+      <table class="mini-table">
+        <thead><tr><th>IP Address</th><th>Origin</th><th>Hits</th></tr></thead>
+        <tbody id="ips-list"><tr><td colspan="3" style="color:var(--text-secondary);">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px;margin-right:5px;"></i>Incident Timeline</div>
+      <div class="timeline" id="timeline-list"><div style="color:var(--text-secondary);font-size:12px;">Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = 'http://localhost:8000/api';
+  let allAlerts = [];
+  let activeSevFilter    = 'all';
+  let activeStatusFilter = 'all';
+
+  // ---- CLOCK ----
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function tick(){
+    const d = new Date();
+    document.getElementById('clock').textContent =
+      pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ---- TOAST ----
+  function showToast(alert) {
+    const wrap = document.getElementById('toast-wrap');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<div class="t-title">&#128680; ${alert.severity.toUpperCase()} ALERT</div><div class="t-msg">${alert.message}</div>`;
+    wrap.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  let knownAlertIds = new Set();
+  function checkNewAlerts(alerts) {
+    alerts.forEach(a => {
+      if (!knownAlertIds.has(a.id)) {
+        if (knownAlertIds.size > 0 && (a.severity === 'critical' || a.severity === 'high')) showToast(a);
+        knownAlertIds.add(a.id);
+      }
+    });
+  }
+
+  // ---- FILTER LOGIC ----
+  function setFilter(sev) {
+    activeSevFilter = sev;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-' + sev).classList.add('active');
+    applyFilters();
+  }
+
+  function setStatusFilter(status) {
+    activeStatusFilter = activeStatusFilter === status ? 'all' : status;
+    ['new','active','closed'].forEach(s => {
+      const b = document.getElementById('btn-' + s);
+      if (b) b.classList.toggle('active', activeStatusFilter === s);
+    });
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    let filtered = allAlerts.filter(a => {
+      const matchSev    = activeSevFilter === 'all' || a.severity === activeSevFilter;
+      const matchStatus = activeStatusFilter === 'all' || a.status === activeStatusFilter;
+      const matchSearch = !search || a.message.toLowerCase().includes(search) || (a.ip||'').includes(search);
+      return matchSev && matchStatus && matchSearch;
+    });
+    document.getElementById('filter-count').textContent =
+      filtered.length + ' of ' + allAlerts.length + ' alerts';
+    renderAlertRows(filtered);
+  }
+
+  // ---- RENDER HELPERS ----
+  function renderMetrics(m){
+    document.getElementById('m-threats').textContent       = m.active_threats;
+    document.getElementById('m-incidents').textContent     = m.open_incidents;
+    document.getElementById('m-mttr').textContent          = m.mttr_minutes;
+    document.getElementById('m-healthy').textContent       = m.healthy_systems;
+    document.getElementById('m-healthy-count').textContent = m.healthy_count + ' / ' + m.total_systems;
+  }
+
+  function renderAlerts(alerts) {
+    allAlerts = alerts;
+    applyFilters();
+  }
+
+  function renderAlertRows(alerts) {
+    const sevMap   = { critical:'sev-critical', high:'sev-high', medium:'sev-medium', low:'sev-low' };
+    const badgeMap = { new:'b-new', active:'b-active', closed:'b-closed' };
+    if (alerts.length === 0) {
+      document.getElementById('alerts-list').innerHTML =
+        '<div style="color:var(--text-secondary);font-size:12px;padding:8px 0;">No alerts match filter.</div>';
+      return;
+    }
+    document.getElementById('alerts-list').innerHTML = alerts.map(a => `
+      <div class="alert-row">
+        <div class="sev ${sevMap[a.severity]||'sev-low'}"></div>
+        <div class="alert-msg">${a.message}</div>
+        <span class="badge ${badgeMap[a.status]||'b-active'}">${a.status.toUpperCase()}</span>
+        <div class="alert-time">${a.time}</div>
+      </div>`).join('');
+  }
+
+  function renderCategories(cats){
+    document.getElementById('categories-list').innerHTML = cats.map(c => `
+      <div class="bar-wrap">
+        <div class="bar-label"><span>${c.name}</span><span>${c.percent}%</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${c.percent}%;background:${c.color};"></div></div>
+      </div>`).join('');
+  }
+
+  function renderSpark(vol){
+    const max = Math.max(...vol.data);
+    const colors = ['#888780','#888780','#378ADD','#378ADD','#EF9F27','#EF9F27','#EF9F27','#E24B4A','#E24B4A','#E24B4A','#E24B4A','#E24B4A'];
+    const wrap = document.getElementById('sparkbars');
+    wrap.innerHTML = '';
+    vol.data.forEach((v, i) => {
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      col.style.height = Math.round((v/max)*80)+'px';
+      col.style.background = colors[i]||'#888780';
+      col.title = v+' alerts';
+      col.innerHTML = `<span>${vol.labels[i]}</span>`;
+      wrap.appendChild(col);
+    });
+  }
+
+  function renderSystems(systems){
+    const sc = { healthy:'s-healthy', degraded:'s-degraded', critical:'s-critical' };
+    document.getElementById('systems-list').innerHTML = systems.map(s => `
+      <tr>
+        <td>${s.name}</td>
+        <td><span class="status-dot ${sc[s.status]||'s-healthy'}"></span>${s.status.charAt(0).toUpperCase()+s.status.slice(1)}</td>
+        <td>${s.uptime}%</td>
+      </tr>`).join('');
+  }
+
+  function renderIPs(ips){
+    const vc = { critical:'v-crit', warning:'v-warn', info:'v-info', normal:'v-muted' };
+    document.getElementById('ips-list').innerHTML = ips.map(ip => `
+      <tr>
+        <td>${ip.ip}</td><td>${ip.country}</td>
+        <td class="${vc[ip.level]||'v-muted'}">${ip.hits}</td>
+      </tr>`).join('');
+  }
+
+  function renderTimeline(incidents){
+    document.getElementById('timeline-list').innerHTML = incidents.map(inc => `
+      <div class="tl-row">
+        <div class="tl-time">${inc.time}</div>
+        <div class="tl-dot" style="background:${inc.color};"></div>
+        <div class="tl-text">${inc.id} &mdash; ${inc.title}</div>
+      </div>`).join('');
+  }
+
+  // ---- FETCH ----
+  async function loadAll(){
+    try {
+      const res = await fetch(`${API_BASE}/all`);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const d = await res.json();
+      renderMetrics(d.metrics);
+      renderAlerts(d.alerts);
+      checkNewAlerts(d.alerts);
+      renderCategories(d.categories);
+      renderSpark(d.alert_volume);
+      renderSystems(d.systems);
+      renderIPs(d.source_ips);
+      renderTimeline(d.incidents);
+    } catch(err){
+      console.warn('Fallback:', err.message);
+      useFallback();
+    }
+  }
+
+  function useFallback(){
+    renderMetrics({active_threats:14,open_incidents:27,mttr_minutes:38,healthy_systems:94,total_systems:151,healthy_count:142});
+    const alerts = [
+      {id:1,severity:'critical',message:'Brute force attempt — ssh.prod-us-east-01',status:'new',time:'00:42',ip:'185.220.101.47'},
+      {id:2,severity:'critical',message:'C2 beacon detected — 185.220.101.47',status:'active',time:'00:38',ip:'45.155.204.12'},
+      {id:3,severity:'high',message:'Privilege escalation — svc_deploy@db-cluster',status:'active',time:'00:31',ip:'194.165.16.29'},
+      {id:4,severity:'high',message:'Exfil: 4.2 GB outbound to 45.155.204.12',status:'new',time:'00:27',ip:'45.155.204.12'},
+      {id:5,severity:'medium',message:'Lateral movement — workstation WS-0047',status:'active',time:'00:19',ip:'103.214.163.5'},
+      {id:6,severity:'medium',message:'Anomalous DNS queries — hr-laptop-12',status:'closed',time:'00:11',ip:'23.94.171.40'},
+      {id:7,severity:'low',message:'Failed MFA attempts (8x) — admin@corp.io',status:'closed',time:'00:04',ip:'91.108.4.212'},
+    ];
+    renderAlerts(alerts); checkNewAlerts(alerts);
+    renderCategories([
+      {name:'Malware',percent:34,color:'#E24B4A'},{name:'Phishing',percent:27,color:'#EF9F27'},
+      {name:'Insider threat',percent:18,color:'#378ADD'},{name:'Ransomware',percent:13,color:'#7F77DD'},
+      {name:'Recon / scan',percent:8,color:'#888780'},
+    ]);
+    renderSpark({labels:['12h','11h','10h','9h','8h','7h','6h','5h','4h','3h','2h','1h'],data:[4,7,5,9,12,8,14,11,17,22,18,14]});
+    renderSystems([
+      {name:'SIEM Core',status:'healthy',uptime:99.9},{name:'Firewall cluster',status:'healthy',uptime:99.7},
+      {name:'EDR agents',status:'degraded',uptime:96.2},{name:'VPN gateway',status:'healthy',uptime:100.0},
+      {name:'Log ingestion',status:'critical',uptime:81.4},{name:'Threat intel API',status:'healthy',uptime:98.8},
+    ]);
+    renderIPs([
+      {ip:'185.220.101.47',country:'RU',hits:841,level:'critical'},{ip:'45.155.204.12',country:'CN',hits:703,level:'critical'},
+      {ip:'194.165.16.29',country:'IR',hits:412,level:'warning'},{ip:'91.108.4.212',country:'KP',hits:299,level:'warning'},
+      {ip:'103.214.163.5',country:'BR',hits:187,level:'info'},{ip:'23.94.171.40',country:'US',hits:94,level:'normal'},
+    ]);
+    renderTimeline([
+      {id:'INC-2041',title:'Brute force escalated to P1',time:'00:42',color:'#E24B4A'},
+      {id:'INC-2040',title:'Analyst blocked exfil host',time:'00:35',color:'#EF9F27'},
+      {id:'INC-2039',title:'Playbook PB-17 triggered automatically',time:'00:28',color:'#378ADD'},
+      {id:'INC-2038',title:'Assigned to Tier 2 analyst',time:'00:19',color:'#EF9F27'},
+      {id:'INC-2037',title:'Closed — False positive confirmed',time:'00:07',color:'#1D9E75'},
+    ]);
+    let threats=14,inc=27;
+    setInterval(()=>{
+      if(Math.random()<0.3) threats=Math.max(0,threats+(Math.random()<0.5?1:-1));
+      if(Math.random()<0.15) inc=Math.max(0,inc+(Math.random()<0.6?1:-1));
+      document.getElementById('m-threats').textContent=threats;
+      document.getElementById('m-incidents').textContent=inc;
+    },4000);
+  }
+
+  loadAll();
+  setInterval(loadAll, 10000);
+</script>
+</body>
+</html>
